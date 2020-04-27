@@ -1,7 +1,7 @@
 ﻿#requires -Version 3.0
 #=============================================================================================
-# Modified on            2018-02-23
-# Version                1.0
+# Modified on            2020-04-27
+# Version                1.1
 # Created by:            Marcus Opel
 # Organization:          https://devmarc.de
 #=============================================================================================
@@ -51,19 +51,23 @@ catch [DllNotFoundException] { # linux (.net core)
 }
 
 # https://wiki.instar.de/1080p_Series_CGI_List
-# $command = '/param.cgi?cmd=getmdalarm&-aname=record'                                                                              # Save Video to SD [on/off status]
-# $command = '/param.cgi?cmd=getmdalarm&-aname=emailsnap&cmd=getmdalarm&-aname=record'                                              # Mail Alarm, Save Video to SD [on/off status]
-# $disableSendMailSaveVideoToSD = '/param.cgi?cmd=setmdalarm&-aname=emailsnap&-switch=off&cmd=setmdalarm&-aname=record&-switch=off' # Disable "Send Mail" & Disable "Save Video to SD"
-# $command = '/param.cgi?cmd=setmdalarm&-aname=emailsnap&-switch=on&cmd=setmdalarm&-aname=record&-switch=on'                        # Enable "Send Mail" & Enable "Save Video to SD"
-# $command = '/param.cgi?cmd=preset&-act=goto&-number=0'                                                                            # goto stored postion 1 (in web gui)
-# $command = '/param.cgi?cmd=preset&-act=goto&-number=1'                                                                            # goto stored postion 2 (in web gui)
+# $command = '/param.cgi?cmd=getmdalarm&-aname=record'                                                                                         # Save Video to SD [on/off status]
+# $command = '/param.cgi?cmd=getmdalarm&-aname=emailsnap&cmd=getmdalarm&-aname=record'                                                         # Mail Alarm, Save Video to SD [on/off status]
+# $disableSendMailSaveVideoToSD = '/param.cgi?cmd=setmdalarm&-aname=emailsnap&-switch=off&cmd=setmdalarm&-aname=record&-switch=off'            # Disable "Send Mail" & Disable "Save Video to SD"
+# $command = '/param.cgi?cmd=setmdalarm&-aname=emailsnap&-switch=on&cmd=setmdalarm&-aname=record&-switch=on'                                   # Enable "Send Mail" & Enable "Save Video to SD"
+# $command = '/param.cgi?cmd=preset&-act=goto&-number=0'                                                                                       # goto stored postion 1 (in web gui)
+# $command = '/param.cgi?cmd=preset&-act=goto&-number=1'                                                                                       # goto stored postion 2 (in web gui)
+# $command = '/param.cgi?cmd=setircutattr&-saradc_switch_value=270&-saradc_b2c_switch_value=270&cmd=set_instar_admin&-index=2&-value=open'     # IR-Cut-Filter open (always day / colour mode) [For all camera models - except IN-9020 FHD and IN-9010 FHD]
+# $command = '/param.cgi?cmd=setircutattr&-saradc_switch_value=208&-saradc_b2c_switch_value=190&cmd=set_instar_admin&-index=2&-value=auto'     # IR-Cut-Filter auto (controlled by light sensor) [For all camera models - except IN-9020 FHD and IN-9010 FHD]
 
-# Mail Alarm [on/off status]
+# Get Mail Alarm [on/off status]
 $mailAlarmStatus = '/param.cgi?cmd=getmdalarm&-aname=emailsnap'
-# Disable "Send Mail" & Disable "Save Video to SD" & Goto Positon 2 (in Web Gui) & Infraredstat close (deactivated)
-$disableAlarmAndDependencies = '/param.cgi?cmd=setmdalarm&-aname=emailsnap&-switch=off&cmd=setmdalarm&-aname=record&-switch=off&?cmd=preset&-act=goto&-number=1&cmd=setinfrared&-infraredstat=close'
-# Enable "Send Mail" & Disable "Save Video to SD" & Goto Positon 1 (in Web Gui) & Infraredstat auto (deactivated)
-$enableAlarmAndDependencies = '/param.cgi?cmd=setmdalarm&-aname=emailsnap&-switch=on&cmd=setmdalarm&-aname=record&-switch=on&?cmd=preset&-act=goto&-number=0&cmd=setinfrared&-infraredstat=auto'
+# Disable "Send Mail" & Disable "Save Video to SD" & Goto Positon 2 (in Web Gui) & Infraredstat close (deactivated) & FTP Snapshot Off & IR-Cut-Filter open
+$disableAlarmAndDependencies = '/param.cgi?cmd=setmdalarm&-aname=emailsnap&-switch=off&cmd=setmdalarm&-aname=record&-switch=off&?cmd=preset&-act=goto&-number=1&cmd=setinfrared&-infraredstat=close&cmd=setmdalarm&-aname=ftpsnap&-switch=off&cmd=setircutattr&-saradc_switch_value=270&-saradc_b2c_switch_value=270&cmd=set_instar_admin&-index=2&-value=open'
+# Goto Positon 1 (in Web Gui) & Infraredstat auto [Enabled Alarm Position]
+$goToPosition1_InfraredstatAuto = '/param.cgi?cmd=preset&-act=goto&-number=0&cmd=setinfrared&-infraredstat=auto'
+# Enable "Send Mail" & Enable "Save Video to SD" & FTP Snapshot On & IR-Cut-Filter auto
+$enableAlarmAndDependencies = '/param.cgi?cmd=setmdalarm&-aname=emailsnap&-switch=on&cmd=setmdalarm&-aname=record&-switch=on&cmd=setmdalarm&-aname=ftpsnap&-switch=on&cmd=setircutattr&-saradc_switch_value=208&-saradc_b2c_switch_value=190&cmd=set_instar_admin&-index=2&-value=auto'
 $getSyslogCommand = '/tmpfs/syslog.txt'
 
 Write-LogExt "Start script ..." -Level Info
@@ -149,6 +153,20 @@ while ($true)
     # query
     $result = Invoke-InstarWebRequest -CameraHost $cameraHost -Command $mailAlarmStatus -UseSSL $cameraUseSSL -User $cameraUser -Password $cameraPassword -TimeoutInSeconds $cameraTimeoutInSeconds
     if ($result.ParameterStatus -ne 'on') {
+
+      $result = Invoke-InstarWebRequest -CameraHost $cameraHost -Command $goToPosition1_InfraredstatAuto -UseSSL $cameraUseSSL -User $cameraUser -Password $cameraPassword -TimeoutInSeconds $cameraTimeoutInSeconds
+      if ($result.HasError) {
+      
+        # log error
+        Write-LogExt -Message "$($result.Exception)" -Level Error
+      }
+      else {
+        Write-LogExt -Message $goToPosition1_InfraredstatAuto -Level Info -Path $actionLogPath
+      }
+      
+      # Wait until camera has the correct position (to prevent false alarm)
+      Start-Sleep 10
+
       $result = Invoke-InstarWebRequest -CameraHost $cameraHost -Command $enableAlarmAndDependencies -UseSSL $cameraUseSSL -User $cameraUser -Password $cameraPassword -TimeoutInSeconds $cameraTimeoutInSeconds
       if ($result.HasError) {
       
